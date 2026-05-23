@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#00e5a0">
+<meta name="description" content="실시간 뉴스 AI 분석 모의투자 종목 추천">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>AI 주식 추천</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --green: #00e5a0;
+  --green-dim: rgba(0,229,160,0.1);
+  --purple: #a78bfa;
+  --yellow: #f5c518;
+  --red: #ff6b6b;
+  --bg: #070810;
+  --surface: rgba(255,255,255,0.035);
+  --border: rgba(255,255,255,0.08);
+  --text: #e2e4f0;
+  --muted: #5a6080;
+  --dimmer: #2a2f50;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { background: var(--bg); }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  min-height: 100vh; min-height: 100dvh;
+  overscroll-behavior: none;
+}
+body::before {
+  content:''; position:fixed; inset:0; z-index:0;
+  background-image:
+    linear-gradient(rgba(0,229,160,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,160,0.025) 1px, transparent 1px);
+  background-size: 36px 36px; pointer-events:none;
+}
+body::after {
+  content:''; position:fixed; top:-180px; left:50%; transform:translateX(-50%);
+  width:480px; height:360px;
+  background:radial-gradient(ellipse, rgba(0,229,160,0.08) 0%, transparent 70%);
+  pointer-events:none; z-index:0;
+}
+
+/* ─── Layout ─── */
+.app {
+  position: relative; z-index:1;
+  max-width: 480px; margin: 0 auto;
+  padding: 0 0 80px;
+  display: flex; flex-direction: column; min-height: 100dvh;
+}
+
+/* ─── Top Nav ─── */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,8,16,0.85);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 18px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.topbar-left { display:flex; flex-direction:column; gap:2px; }
+.topbar-badge { display:flex; align-items:center; gap:6px; }
+.dot {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--green); box-shadow:0 0 8px var(--green);
+  animation: pulse 2s infinite;
+}
+.topbar-eyebrow { font-size:9px; letter-spacing:2.5px; color:var(--green); font-weight:700; text-transform:uppercase; }
+.topbar-title { font-size:17px; font-weight:800; letter-spacing:-0.5px; color:#fff; }
+.topbar-time { font-size:11px; color:var(--muted); font-family:monospace; }
+
+/* ─── Scroll content ─── */
+.scroll-area { flex:1; overflow-y:auto; padding: 18px 16px 24px; }
+
+/* ─── Section label ─── */
+.sec-label {
+  font-size:9px; color:var(--dimmer); letter-spacing:2.5px;
+  text-transform:uppercase; margin-bottom:10px; font-weight:600;
+}
+
+/* ─── Source pills ─── */
+.sources { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:18px; }
+.pill {
+  font-size:10px; padding:3px 9px; border-radius:20px;
+  border:1px solid rgba(0,229,160,0.2); color:var(--green);
+  background:var(--green-dim); letter-spacing:0.3px;
+}
+
+/* ─── News card ─── */
+.card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:14px; padding:14px; margin-bottom:14px;
+}
+.news-item {
+  display:flex; align-items:flex-start; gap:8px;
+  padding:7px 6px; border-radius:8px; margin-bottom:2px;
+  transition:background 0.15s;
+}
+.news-item:active { background:var(--green-dim); }
+.news-time { font-size:10px; color:var(--green); font-family:monospace; min-width:30px; padding-top:1px; }
+.news-src {
+  font-size:9px; color:#7a80a0; background:rgba(0,229,160,0.08);
+  padding:2px 5px; border-radius:4px; min-width:48px; text-align:center; white-space:nowrap;
+}
+.news-title { font-size:12px; color:#c0c4e0; line-height:1.45; flex:1; }
+
+/* ─── Analyze button (bottom fixed) ─── */
+.bottom-bar {
+  position:fixed; bottom:0; left:0; right:0; z-index:100;
+  background:rgba(7,8,16,0.92);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border-top:1px solid var(--border);
+  padding:12px 20px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+}
+.btn {
+  width:100%; max-width:360px;
+  padding:15px; border-radius:40px; border:none;
+  background:linear-gradient(135deg, var(--green) 0%, #00b8d4 100%);
+  color:#07080f; font-size:15px; font-weight:800; letter-spacing:0.3px;
+  cursor:pointer; font-family:'Noto Sans KR',sans-serif;
+  box-shadow:0 0 28px rgba(0,229,160,0.28);
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  transition:all 0.2s; -webkit-appearance:none;
+}
+.btn:active { transform:scale(0.97); box-shadow:0 0 10px rgba(0,229,160,0.1); }
+.btn.loading { background:rgba(0,229,160,0.15); color:var(--green); box-shadow:none; }
+.btn-sub { font-size:10px; color:var(--dimmer); }
+.spinner {
+  width:14px; height:14px;
+  border:2px solid var(--green); border-top-color:transparent;
+  border-radius:50%; animation:spin 0.7s linear infinite; flex-shrink:0;
+}
+
+/* ─── Stream box ─── */
+.stream-box {
+  background:rgba(0,229,160,0.04); border:1px solid rgba(0,229,160,0.12);
+  border-radius:10px; padding:12px 14px; margin-bottom:14px;
+  font-family:monospace; font-size:10px; color:var(--green);
+  max-height:44px; overflow:hidden; line-height:1.5;
+}
+.cursor { animation:blink 1s infinite; }
+
+/* ─── Rec cards ─── */
+.rec-card {
+  border-radius:14px; padding:16px; border:1px solid var(--border);
+  background:var(--surface); margin-bottom:10px;
+  cursor:pointer; transition:all 0.2s;
+  position:relative; overflow:hidden;
+}
+.rec-card.open { border-color:rgba(0,229,160,0.28); background:rgba(0,229,160,0.04); }
+.rec-card:active { opacity:0.85; }
+.rank-stripe {
+  position:absolute; left:0; top:0; bottom:0;
+  width:3px; border-radius:14px 0 0 14px;
+}
+.rec-head { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.rec-meta { flex:1; }
+.rec-top { display:flex; align-items:center; gap:8px; margin-bottom:3px; }
+.rank-badge {
+  font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; letter-spacing:0.5px;
+}
+.rec-name { font-size:17px; font-weight:800; letter-spacing:-0.5px; color:#eef0f8; }
+.rec-code { font-size:10px; color:var(--muted); }
+.rec-right { display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
+.conviction-badge {
+  font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap;
+}
+.rec-return { font-size:14px; font-weight:800; color:var(--green); }
+.rec-summary { font-size:12px; color:#7a84a8; margin-top:10px; line-height:1.5; }
+.rec-toggle { font-size:10px; color:var(--dimmer); text-align:right; margin-top:8px; }
+
+/* ─── Detail ─── */
+.detail { margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.06); }
+.detail-sec { margin-bottom:12px; }
+.detail-label { font-size:9px; color:var(--dimmer); letter-spacing:2px; text-transform:uppercase; margin-bottom:7px; font-weight:600; }
+.detail-row { display:flex; gap:7px; margin-bottom:5px; align-items:flex-start; }
+.detail-icon { font-size:11px; flex-shrink:0; margin-top:1px; }
+.detail-text { font-size:12px; color:#9098c0; line-height:1.5; }
+.news-ref {
+  font-size:11px; color:var(--muted); background:rgba(0,229,160,0.04);
+  border-radius:6px; padding:5px 9px; margin-bottom:4px; line-height:1.4;
+}
+
+/* ─── Outlook ─── */
+.outlook-card {
+  background:rgba(167,139,250,0.05); border:1px solid rgba(167,139,250,0.15);
+  border-radius:14px; padding:16px; margin-top:4px; margin-bottom:10px;
+}
+.outlook-label { font-size:9px; color:var(--purple); letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; font-weight:600; }
+.outlook-text { font-size:12px; color:#8090b0; line-height:1.7; white-space:pre-line; }
+.disclaimer { font-size:10px; color:#1e2440; text-align:center; margin-top:14px; line-height:1.6; padding:0 8px; }
+
+/* ─── Install banner ─── */
+.install-banner {
+  background:rgba(0,229,160,0.06); border:1px solid rgba(0,229,160,0.18);
+  border-radius:12px; padding:12px 14px; margin-bottom:16px;
+  display:flex; align-items:center; gap:10px;
+}
+.install-icon { font-size:20px; flex-shrink:0; }
+.install-text { flex:1; font-size:12px; color:#8090b0; line-height:1.4; }
+.install-btn {
+  background:var(--green-dim); border:1px solid rgba(0,229,160,0.3);
+  color:var(--green); font-size:11px; font-weight:700;
+  padding:6px 12px; border-radius:8px; cursor:pointer;
+  white-space:nowrap; font-family:'Noto Sans KR',sans-serif;
+  flex-shrink:0;
+}
+
+/* ─── Animations ─── */
+@keyframes pulse {
+  0%,100%{opacity:1;box-shadow:0 0 9px var(--green);}
+  50%{opacity:0.4;box-shadow:0 0 3px var(--green);}
+}
+@keyframes spin { to{transform:rotate(360deg);} }
+@keyframes blink { 0%,100%{opacity:1;}50%{opacity:0;} }
+@keyframes fadeUp {
+  from{opacity:0;transform:translateY(10px);}
+  to{opacity:1;transform:translateY(0);}
+}
+.fade-up { animation:fadeUp 0.35s ease forwards; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-badge">
+        <div class="dot"></div>
+        <span class="topbar-eyebrow">AI Stock Advisor</span>
+      </div>
+      <div class="topbar-title">모의투자 종목 추천</div>
+    </div>
+    <div class="topbar-time" id="clock"></div>
+  </div>
+
+  <!-- Scroll Area -->
+  <div class="scroll-area">
+
+    <!-- Install Banner -->
+    <div class="install-banner" id="installBanner" style="display:none">
+      <div class="install-icon">📲</div>
+      <div class="install-text">홈 화면에 추가하면<br>앱처럼 사용할 수 있어요</div>
+      <button class="install-btn" id="installBtn">설치하기</button>
+    </div>
+
+    <!-- Sources -->
+    <div class="sec-label">연결된 뉴스 소스</div>
+    <div class="sources" id="sources"></div>
+
+    <!-- News -->
+    <div class="sec-label">오늘의 주요 뉴스</div>
+    <div class="card">
+      <div id="newsList"></div>
+    </div>
+
+    <!-- Stream -->
+    <div class="stream-box" id="streamBox" style="display:none"></div>
+
+    <!-- Results -->
+    <div id="results"></div>
+
+  </div>
+
+  <!-- Bottom CTA -->
+  <div class="bottom-bar">
+    <button class="btn" id="analyzeBtn" onclick="analyze()">✦ AI 분석 시작</button>
+    <div class="btn-sub" id="btnSub">뉴스를 분석해 오늘 추천 종목을 알려드려요</div>
+  </div>
+
+</div>
+
+<script>
+// ── Service Worker ──
+if('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+// ── PWA Install ──
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBanner').style.display = 'flex';
+});
+document.getElementById('installBtn')?.addEventListener('click', async () => {
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if(outcome === 'accepted') document.getElementById('installBanner').style.display = 'none';
+  deferredPrompt = null;
+});
+
+// ── Clock ──
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+updateClock(); setInterval(updateClock, 1000);
+
+// ── Data ──
+const NEWS_SOURCES = ["한국경제","매일경제","연합뉴스","머니투데이","이데일리"];
+const MOCK_NEWS = [
+  { title:"삼성전자, HBM4 양산 본격화…AI 반도체 수요 급증", source:"한국경제", time:"07:12" },
+  { title:"현대차, 美 관세 우려에도 2분기 실적 '호조' 예상", source:"매일경제", time:"07:18" },
+  { title:"SK하이닉스, 엔비디아 납품 물량 확대…목표주가 상향", source:"이데일리", time:"07:23" },
+  { title:"카카오뱅크, 비대면 대출 규제 완화 수혜 전망", source:"머니투데이", time:"07:31" },
+  { title:"LG에너지솔루션, 北美 배터리 공장 증설 계획 발표", source:"연합뉴스", time:"07:35" },
+  { title:"POSCO홀딩스, 리튬 사업 흑자전환 임박…원가 절감 효과", source:"한국경제", time:"07:41" },
+  { title:"네이버, AI 검색 고도화로 광고 매출 반등 기대", source:"매일경제", time:"07:44" },
+  { title:"셀트리온, 바이오시밀러 유럽 점유율 확대 지속", source:"이데일리", time:"07:50" },
+];
+
+// ── Init UI ──
+NEWS_SOURCES.forEach(s => {
+  document.getElementById('sources').innerHTML += `<span class="pill">${s}</span>`;
+});
+MOCK_NEWS.forEach(n => {
+  document.getElementById('newsList').innerHTML += `
+    <div class="news-item">
+      <span class="news-time">${n.time}</span>
+      <span class="news-src">${n.source}</span>
+      <span class="news-title">${n.title}</span>
+    </div>`;
+});
+
+// ── Helpers ──
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const convCol = c => c==='상'?'#00e5a0':c==='중'?'#f5c518':'#ff6b6b';
+const rankCol = r => (['#00e5a0','#a78bfa','#f5c518'])[r-1]||'#888';
+
+function toggleCard(name) {
+  const card = document.getElementById('card-'+name);
+  const detail = document.getElementById('detail-'+name);
+  const tog = document.getElementById('toggle-'+name);
+  if(!card||!detail) return;
+  const isOpen = card.classList.contains('open');
+  document.querySelectorAll('.rec-card.open').forEach(c => {
+    c.classList.remove('open');
+    const d = document.getElementById('detail-'+c.dataset.name);
+    const t = document.getElementById('toggle-'+c.dataset.name);
+    if(d) d.style.display='none';
+    if(t) t.textContent='▼ 상세 근거 보기';
+  });
+  if(!isOpen) {
+    card.classList.add('open');
+    detail.style.display='block';
+    tog.textContent='▲ 접기';
+    card.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+}
+
+// ── Analyze ──
+async function analyze() {
+  const btn = document.getElementById('analyzeBtn');
+  const sub = document.getElementById('btnSub');
+  const streamBox = document.getElementById('streamBox');
+  const results = document.getElementById('results');
+
+  btn.className='btn loading';
+  btn.innerHTML='<div class="spinner"></div> 뉴스 수집 중...';
+  sub.textContent='신뢰할 수 있는 경제 뉴스를 수집하고 있어요';
+  streamBox.style.display='none';
+  results.innerHTML='';
+
+  await sleep(900);
+  btn.innerHTML='<div class="spinner"></div> AI 분석 중...';
+  sub.textContent='Claude AI가 뉴스를 분석하고 있어요';
+
+  const newsText = MOCK_NEWS.map((n,i)=>`${i+1}. [${n.source}] ${n.title}`).join('\n');
+
+  const systemPrompt = `당신은 한국 주식시장(코스피/코스닥) 전문 애널리스트입니다.
+뉴스를 분석하여 당일 장 시작(7시 30분) 기준 매수 추천 종목을 선정합니다.
+반드시 아래 JSON 형식으로만 응답하세요. 마크다운 코드블록 없이 순수 JSON만 출력하세요.
+
+{
+  "recommendations": [
+    {
+      "rank": 1,
+      "name": "종목명",
+      "ticker": "종목코드 6자리",
+      "market": "KOSPI 또는 KOSDAQ",
+      "conviction": "상 또는 중 또는 하",
+      "targetReturn": "+X%",
+      "summary": "핵심 한 줄 요약 (20자 이내)",
+      "reasons": ["근거1", "근거2", "근거3"],
+      "risks": ["리스크1"],
+      "relatedNews": ["관련 뉴스 제목 일부"]
+    }
+  ],
+  "marketOutlook": "오늘 시장 전반 전망 (2~3문장)",
+  "analysisNote": "분석 시 고려한 주요 사항 (1~2문장)"
+}`;
+
+  const userPrompt = `오늘 오전 7시 30분 장 시작 직전 수집된 주요 경제 뉴스입니다:\n\n${newsText}\n\n위 뉴스를 바탕으로 오늘 장 시작가로 매수하기 좋은 한국 주식 종목 3개를 추천해주세요.`;
+
+  try {
+    streamBox.style.display='block';
+    streamBox.innerHTML='';
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        system: systemPrompt,
+        messages:[{role:'user', content: userPrompt}]
+      })
+    });
+
+    const data = await res.json();
+    const rawText = (data.content||[]).map(c=>c.text||'').join('');
+
+    for(let i=0; i<Math.min(rawText.length,80); i++) {
+      await sleep(10);
+      streamBox.innerHTML = rawText.slice(0,i+1) + '<span class="cursor">▌</span>';
+    }
+
+    const clean = rawText.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean);
+
+    streamBox.style.display='none';
+    renderResults(parsed);
+
+    const t = new Date().toLocaleTimeString('ko-KR');
+    sub.textContent = `마지막 분석: ${t}`;
+
+  } catch(err) {
+    streamBox.innerHTML='⚠️ 오류: ' + err.message;
+    sub.textContent='다시 시도해 주세요';
+  }
+
+  btn.className='btn';
+  btn.innerHTML='✦ 다시 분석';
+}
+
+function renderResults(data) {
+  const results = document.getElementById('results');
+  results.innerHTML='';
+
+  const label = document.createElement('div');
+  label.className='sec-label fade-up';
+  label.style.marginBottom='10px';
+  label.textContent='AI 추천 종목';
+  results.appendChild(label);
+
+  (data.recommendations||[]).forEach((rec,i) => {
+    const col = rankCol(rec.rank);
+    const cCol = convCol(rec.conviction);
+    const card = document.createElement('div');
+    card.className='rec-card fade-up';
+    card.id='card-'+rec.name;
+    card.dataset.name=rec.name;
+    card.style.animationDelay=(i*0.1)+'s';
+    card.onclick=()=>toggleCard(rec.name);
+
+    const reasons = (rec.reasons||[]).map(r=>
+      `<div class="detail-row"><span class="detail-icon" style="color:var(--green)">✓</span><span class="detail-text">${r}</span></div>`
+    ).join('');
+    const risks = (rec.risks||[]).map(r=>
+      `<div class="detail-row"><span class="detail-icon" style="color:var(--red)">!</span><span class="detail-text">${r}</span></div>`
+    ).join('');
+    const newsRefs = (rec.relatedNews||[]).map(n=>
+      `<div class="news-ref">📰 ${n}</div>`
+    ).join('');
+
+    card.innerHTML=`
+      <div class="rank-stripe" style="background:${col}"></div>
+      <div class="rec-head">
+        <div class="rec-meta">
+          <div class="rec-top">
+            <span class="rank-badge" style="color:${col};background:${col}18">#${rec.rank}</span>
+            <span class="rec-name">${rec.name}</span>
+          </div>
+          <div class="rec-code">${rec.ticker||'—'} · ${rec.market||'KOSPI'}</div>
+        </div>
+        <div class="rec-right">
+          <span class="conviction-badge" style="color:${cCol};background:${cCol}18">확신 ${rec.conviction}</span>
+          <span class="rec-return">${rec.targetReturn}</span>
+        </div>
+      </div>
+      <div class="rec-summary">${rec.summary}</div>
+      <div class="detail" id="detail-${rec.name}" style="display:none">
+        ${reasons?`<div class="detail-sec"><div class="detail-label">매수 근거</div>${reasons}</div>`:''}
+        ${risks?`<div class="detail-sec"><div class="detail-label">리스크</div>${risks}</div>`:''}
+        ${newsRefs?`<div class="detail-sec"><div class="detail-label">관련 뉴스</div>${newsRefs}</div>`:''}
+      </div>
+      <div class="rec-toggle" id="toggle-${rec.name}">▼ 상세 근거 보기</div>
+    `;
+    results.appendChild(card);
+  });
+
+  if(data.marketOutlook||data.analysisNote) {
+    const outlook=document.createElement('div');
+    outlook.className='outlook-card fade-up';
+    outlook.innerHTML=`
+      <div class="outlook-label">시장 전망 & 분석 노트</div>
+      <div class="outlook-text">${[data.marketOutlook,data.analysisNote].filter(Boolean).join('\n\n')}</div>
+    `;
+    results.appendChild(outlook);
+  }
+
+  const disc=document.createElement('p');
+  disc.className='disclaimer fade-up';
+  disc.textContent='⚠️ AI 뉴스 분석 결과이며, 실제 투자 조언이 아닌 모의투자 학습 목적입니다.';
+  results.appendChild(disc);
+}
+</script>
+</body>
+</html>
