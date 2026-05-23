@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>AI 주식 추천</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #00e5a0;
+    --green-dim: rgba(0,229,160,0.12);
+    --purple: #a78bfa;
+    --yellow: #f5c518;
+    --red: #ff6b6b;
+    --bg: #070810;
+    --surface: rgba(255,255,255,0.03);
+    --border: rgba(255,255,255,0.07);
+    --text: #e2e4f0;
+    --muted: #5a6080;
+    --dimmer: #2a2f50;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', sans-serif; min-height: 100vh; }
+
+  /* Grid BG */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(0,229,160,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,160,0.025) 1px, transparent 1px);
+    background-size: 36px 36px;
+    pointer-events: none;
+  }
+  body::after {
+    content: '';
+    position: fixed; top: -150px; left: 50%; transform: translateX(-50%);
+    width: 500px; height: 350px;
+    background: radial-gradient(ellipse, rgba(0,229,160,0.07) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; max-width: 480px; margin: 0 auto; padding: 28px 16px 80px; }
+
+  /* Header */
+  .badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 10px; letter-spacing: 2.5px; color: var(--green);
+    text-transform: uppercase; font-weight: 700; margin-bottom: 8px;
+  }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green); box-shadow: 0 0 10px var(--green);
+    animation: pulse 2s infinite;
+  }
+  h1 {
+    font-size: 26px; font-weight: 800; letter-spacing: -0.8px;
+    background: linear-gradient(135deg, #fff 0%, #8890b0 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    line-height: 1.15; margin-bottom: 6px;
+  }
+  .subtitle { font-size: 12px; color: var(--muted); letter-spacing: 0.2px; margin-bottom: 24px; }
+
+  /* Source pills */
+  .sources { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+  .pill {
+    font-size: 10px; padding: 4px 10px; border-radius: 20px;
+    border: 1px solid rgba(0,229,160,0.22); color: var(--green);
+    background: var(--green-dim); letter-spacing: 0.4px;
+  }
+
+  /* Card */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px; margin-bottom: 14px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  /* News */
+  .section-label {
+    font-size: 10px; color: var(--dimmer); letter-spacing: 2px;
+    text-transform: uppercase; margin-bottom: 10px;
+  }
+  .news-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 8px 8px; border-radius: 8px; margin-bottom: 4px;
+    transition: background 0.2s;
+  }
+  .news-item:active { background: var(--green-dim); }
+  .news-time { font-size: 10px; color: var(--green); font-family: monospace; min-width: 32px; padding-top: 2px; }
+  .news-src {
+    font-size: 10px; color: #7a80a0; background: rgba(0,229,160,0.08);
+    padding: 2px 6px; border-radius: 4px; min-width: 52px; text-align: center; white-space: nowrap;
+  }
+  .news-title { font-size: 12px; color: #c0c4e0; line-height: 1.45; flex: 1; }
+
+  /* Analyze Button */
+  .btn-wrap { text-align: center; margin: 20px 0 24px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 40px; border-radius: 40px; border: none;
+    background: linear-gradient(135deg, var(--green) 0%, #00b8d4 100%);
+    color: #07080f; font-size: 14px; font-weight: 800; letter-spacing: 0.3px;
+    cursor: pointer; transition: all 0.25s;
+    box-shadow: 0 0 28px rgba(0,229,160,0.28);
+    font-family: 'Noto Sans KR', sans-serif;
+    -webkit-appearance: none;
+  }
+  .btn:active { transform: scale(0.97); box-shadow: 0 0 10px rgba(0,229,160,0.15); }
+  .btn.loading {
+    background: rgba(0,229,160,0.15); color: var(--green);
+    box-shadow: none; cursor: not-allowed;
+  }
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid var(--green); border-top-color: transparent;
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+  }
+  .last-updated { font-size: 10px; color: var(--dimmer); margin-top: 8px; }
+
+  /* Streaming */
+  .stream-box {
+    background: rgba(0,229,160,0.04); border: 1px solid rgba(0,229,160,0.15);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 16px;
+    font-family: monospace; font-size: 10px; color: var(--green);
+    max-height: 48px; overflow: hidden; line-height: 1.5;
+  }
+  .cursor { animation: blink 1s infinite; }
+
+  /* Rec cards */
+  .rec-card {
+    border-radius: 14px; padding: 16px;
+    border: 1px solid var(--border); background: var(--surface);
+    margin-bottom: 12px; cursor: pointer;
+    transition: all 0.22s; position: relative; overflow: hidden;
+  }
+  .rec-card.open { border-color: rgba(0,229,160,0.3); background: rgba(0,229,160,0.05); }
+  .rec-card:active { opacity: 0.85; }
+  .rank-stripe {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; border-radius: 14px 0 0 14px;
+  }
+  .rec-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+  .rec-name { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; color: #e8eaf0; }
+  .rec-ticker { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .rec-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .badge-pill {
+    font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px;
+  }
+  .rec-return { font-size: 14px; font-weight: 700; color: var(--green); }
+  .rec-summary { font-size: 12px; color: #8090b0; margin-top: 10px; line-height: 1.5; }
+  .rec-toggle { font-size: 10px; color: var(--dimmer); margin-top: 8px; text-align: right; }
+
+  /* Detail */
+  .detail { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.06); }
+  .detail-label { font-size: 10px; color: var(--dimmer); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+  .detail-row { display: flex; gap: 7px; margin-bottom: 6px; align-items: flex-start; }
+  .detail-icon { font-size: 11px; margin-top: 1px; flex-shrink: 0; }
+  .detail-text { font-size: 12px; color: #a0a8c8; line-height: 1.5; }
+  .news-ref {
+    font-size: 11px; color: var(--muted);
+    background: rgba(0,229,160,0.05); border-radius: 6px;
+    padding: 5px 9px; margin-bottom: 4px; line-height: 1.4;
+  }
+
+  /* Outlook */
+  .outlook-card {
+    background: rgba(167,139,250,0.05); border: 1px solid rgba(167,139,250,0.15);
+    border-radius: 14px; padding: 16px; margin-top: 4px;
+  }
+  .outlook-label { font-size: 10px; color: var(--purple); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+  .outlook-text { font-size: 12px; color: #8090b0; line-height: 1.7; white-space: pre-line; }
+
+  /* Disclaimer */
+  .disclaimer { font-size: 10px; color: #222840; text-align: center; margin-top: 20px; line-height: 1.6; }
+
+  /* Animations */
+  @keyframes pulse {
+    0%,100% { opacity:1; box-shadow: 0 0 10px var(--green); }
+    50% { opacity:0.4; box-shadow: 0 0 3px var(--green); }
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  @keyframes fadeUp {
+    from { opacity:0; transform: translateY(12px); }
+    to { opacity:1; transform: translateY(0); }
+  }
+  .fade-up { animation: fadeUp 0.4s ease forwards; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <div class="badge"><div class="dot"></div>AI Stock Advisor</div>
+  <h1>모의투자<br>종목 추천</h1>
+  <p class="subtitle">실시간 경제 뉴스 AI 분석 · 장 시작가 기준 매수 추천</p>
+
+  <!-- Sources -->
+  <div class="sources" id="sources"></div>
+
+  <!-- News -->
+  <div class="card">
+    <div class="section-label">오늘의 주요 뉴스</div>
+    <div id="newsList"></div>
+  </div>
+
+  <!-- Button -->
+  <div class="btn-wrap">
+    <button class="btn" id="analyzeBtn" onclick="analyze()">✦ AI 분석 시작</button>
+    <div class="last-updated" id="lastUpdated"></div>
+  </div>
+
+  <!-- Streaming -->
+  <div class="stream-box" id="streamBox" style="display:none"></div>
+
+  <!-- Results -->
+  <div id="results"></div>
+</div>
+
+<script>
+const NEWS_SOURCES = ["한국경제","매일경제","연합뉴스","머니투데이","이데일리"];
+
+const MOCK_NEWS = [
+  { title:"삼성전자, HBM4 양산 본격화…AI 반도체 수요 급증", source:"한국경제", time:"07:12" },
+  { title:"현대차, 美 관세 우려에도 2분기 실적 '호조' 예상", source:"매일경제", time:"07:18" },
+  { title:"SK하이닉스, 엔비디아 납품 물량 확대…목표주가 상향", source:"이데일리", time:"07:23" },
+  { title:"카카오뱅크, 비대면 대출 규제 완화 수혜 전망", source:"머니투데이", time:"07:31" },
+  { title:"LG에너지솔루션, 北美 배터리 공장 증설 계획 발표", source:"연합뉴스", time:"07:35" },
+  { title:"POSCO홀딩스, 리튬 사업 흑자전환 임박…원가 절감 효과", source:"한국경제", time:"07:41" },
+  { title:"네이버, AI 검색 고도화로 광고 매출 반등 기대", source:"매일경제", time:"07:44" },
+  { title:"셀트리온, 바이오시밀러 유럽 점유율 확대 지속", source:"이데일리", time:"07:50" },
+];
+
+// Init
+NEWS_SOURCES.forEach(s => {
+  document.getElementById('sources').innerHTML += `<span class="pill">${s}</span>`;
+});
+MOCK_NEWS.forEach(n => {
+  document.getElementById('newsList').innerHTML += `
+    <div class="news-item">
+      <span class="news-time">${n.time}</span>
+      <span class="news-src">${n.source}</span>
+      <span class="news-title">${n.title}</span>
+    </div>`;
+});
+
+let openCard = null;
+
+function convictionColor(c) {
+  if(c==='상') return '#00e5a0';
+  if(c==='중') return '#f5c518';
+  return '#ff6b6b';
+}
+function rankColor(r) {
+  return ['#00e5a0','#a78bfa','#f5c518'][r-1] || '#888';
+}
+
+function toggleCard(name) {
+  const el = document.getElementById('card-' + name);
+  const detail = document.getElementById('detail-' + name);
+  const toggle = document.getElementById('toggle-' + name);
+  if(!el || !detail) return;
+  const isOpen = el.classList.contains('open');
+  // close all
+  document.querySelectorAll('.rec-card.open').forEach(c => {
+    c.classList.remove('open');
+    const d = document.getElementById('detail-' + c.dataset.name);
+    const t = document.getElementById('toggle-' + c.dataset.name);
+    if(d) d.style.display = 'none';
+    if(t) t.textContent = '▼ 상세 근거 보기';
+  });
+  if(!isOpen) {
+    el.classList.add('open');
+    detail.style.display = 'block';
+    toggle.textContent = '▲ 접기';
+  }
+}
+
+async function analyze() {
+  const btn = document.getElementById('analyzeBtn');
+  const streamBox = document.getElementById('streamBox');
+  const results = document.getElementById('results');
+
+  btn.className = 'btn loading';
+  btn.innerHTML = '<div class="spinner"></div> 뉴스 수집 중...';
+  streamBox.style.display = 'none';
+  results.innerHTML = '';
+
+  await sleep(1000);
+  btn.innerHTML = '<div class="spinner"></div> AI 분석 중...';
+
+  const newsText = MOCK_NEWS.map((n,i) => `${i+1}. [${n.source}] ${n.title}`).join('\n');
+
+  const systemPrompt = `당신은 한국 주식시장(코스피/코스닥) 전문 애널리스트입니다.
+뉴스를 분석하여 당일 장 시작(7시 30분) 기준 매수 추천 종목을 선정합니다.
+반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 JSON만 출력하세요.
+
+{
+  "recommendations": [
+    {
+      "rank": 1,
+      "name": "종목명",
+      "ticker": "종목코드 6자리",
+      "market": "KOSPI 또는 KOSDAQ",
+      "conviction": "상 또는 중 또는 하",
+      "targetReturn": "+X%",
+      "summary": "한 줄 핵심 요약 (20자 이내)",
+      "reasons": ["근거1", "근거2", "근거3"],
+      "risks": ["리스크1"],
+      "relatedNews": ["관련 뉴스 제목 일부"]
+    }
+  ],
+  "marketOutlook": "오늘 시장 전반 전망 (2~3문장)",
+  "analysisNote": "분석 시 고려한 주요 사항 (1~2문장)"
+}`;
+
+  const userPrompt = `오늘 오전 7시 30분 장 시작 직전 수집된 주요 경제 뉴스입니다:\n\n${newsText}\n\n위 뉴스를 바탕으로 오늘 장 시작가로 매수하기 좋은 한국 주식 종목 3개를 추천해주세요.`;
+
+  try {
+    streamBox.style.display = 'block';
+    streamBox.innerHTML = '';
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }]
+      })
+    });
+
+    const data = await response.json();
+    const rawText = data.content?.map(c => c.text || '').join('') || '';
+
+    // Fake stream
+    for(let i = 0; i < Math.min(rawText.length, 80); i++) {
+      await sleep(12);
+      streamBox.innerHTML = rawText.slice(0,i+1) + '<span class="cursor">▌</span>';
+    }
+
+    const clean = rawText.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean);
+
+    streamBox.style.display = 'none';
+    renderResults(parsed);
+
+    document.getElementById('lastUpdated').textContent =
+      '마지막 분석: ' + new Date().toLocaleTimeString('ko-KR');
+
+  } catch(err) {
+    streamBox.innerHTML = '오류: ' + err.message;
+  }
+
+  btn.className = 'btn';
+  btn.innerHTML = '✦ 다시 분석';
+}
+
+function renderResults(data) {
+  const results = document.getElementById('results');
+  results.innerHTML = '';
+
+  const label = document.createElement('div');
+  label.className = 'section-label fade-up';
+  label.style.marginBottom = '12px';
+  label.textContent = 'AI 추천 종목';
+  results.appendChild(label);
+
+  data.recommendations.forEach((rec, i) => {
+    const col = rankColor(rec.rank);
+    const cCol = convictionColor(rec.conviction);
+
+    const card = document.createElement('div');
+    card.className = 'rec-card fade-up';
+    card.id = 'card-' + rec.name;
+    card.dataset.name = rec.name;
+    card.style.animationDelay = (i * 0.1) + 's';
+    card.onclick = () => toggleCard(rec.name);
+
+    const reasonsHtml = (rec.reasons||[]).map(r =>
+      `<div class="detail-row"><span class="detail-icon" style="color:var(--green)">✓</span><span class="detail-text">${r}</span></div>`
+    ).join('');
+
+    const risksHtml = (rec.risks||[]).map(r =>
+      `<div class="detail-row"><span class="detail-icon" style="color:var(--red)">!</span><span class="detail-text">${r}</span></div>`
+    ).join('');
+
+    const newsHtml = (rec.relatedNews||[]).map(n =>
+      `<div class="news-ref">📰 ${n}</div>`
+    ).join('');
+
+    card.innerHTML = `
+      <div class="rank-stripe" style="background:${col}"></div>
+      <div class="rec-header">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span class="badge-pill" style="color:${col};background:${col}18;font-size:10px">#${rec.rank}</span>
+            <span class="rec-name">${rec.name}</span>
+          </div>
+          <div class="rec-ticker">${rec.ticker||'—'} · ${rec.market||'KOSPI'}</div>
+        </div>
+        <div class="rec-badges">
+          <span class="badge-pill" style="color:${cCol};background:${cCol}18">확신 ${rec.conviction}</span>
+          <span class="rec-return">${rec.targetReturn}</span>
+        </div>
+      </div>
+      <div class="rec-summary">${rec.summary}</div>
+      <div class="detail" id="detail-${rec.name}" style="display:none">
+        ${reasonsHtml ? `<div class="detail-label">매수 근거</div>${reasonsHtml}` : ''}
+        ${risksHtml ? `<div class="detail-label" style="margin-top:12px">리스크</div>${risksHtml}` : ''}
+        ${newsHtml ? `<div class="detail-label" style="margin-top:12px">관련 뉴스</div>${newsHtml}` : ''}
+      </div>
+      <div class="rec-toggle" id="toggle-${rec.name}">▼ 상세 근거 보기</div>
+    `;
+    results.appendChild(card);
+  });
+
+  if(data.marketOutlook || data.analysisNote) {
+    const outlook = document.createElement('div');
+    outlook.className = 'outlook-card fade-up';
+    outlook.innerHTML = `
+      <div class="outlook-label">시장 전망 & 분석 노트</div>
+      <div class="outlook-text">${[data.marketOutlook, data.analysisNote].filter(Boolean).join('\n\n')}</div>
+    `;
+    results.appendChild(outlook);
+  }
+
+  const disc = document.createElement('p');
+  disc.className = 'disclaimer fade-up';
+  disc.textContent = '⚠️ 본 추천은 AI 뉴스 분석 결과로, 실제 투자 조언이 아닌 모의투자 학습 목적입니다.';
+  results.appendChild(disc);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>
